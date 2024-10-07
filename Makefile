@@ -14,6 +14,6 @@
 
 .PHONY: all snapshot-controller csi-snapshotter snapshot-validation-webhook clean test
 
-CMDS=snapshot-controller csi-snapshotter snapshot-validation-webhook
+CMDS=csi-snapshotter
 all: build
 include release-tools/build.make
