@@ -70,13 +70,6 @@ func (in *VolumeSnapshotClass) DeepCopyInto(out *VolumeSnapshotClass) {
 			(*out)[key] = val
 		}
 	}
-	if in.AllowedTopologies != nil {
-		in, out := &in.AllowedTopologies, &out.AllowedTopologies
-		*out = make([]corev1.TopologySelectorTerm, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
-	}
 	return
 }
 
@@ -236,13 +229,6 @@ func (in *VolumeSnapshotContentSpec) DeepCopyInto(out *VolumeSnapshotContentSpec
 		in, out := &in.SourceVolumeMode, &out.SourceVolumeMode
 		*out = new(corev1.PersistentVolumeMode)
 		**out = **in
-	}
-	if in.NodeAffinity != nil {
-		in, out := &in.NodeAffinity, &out.NodeAffinity
-		*out = make([]corev1.TopologySelectorTerm, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
 	}
 	return
 }
