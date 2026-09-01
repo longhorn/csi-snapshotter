@@ -293,11 +293,11 @@ func (opMgr *operationMetricsManager) init() {
 	// this scheduled routine will catch any leaked operations.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go opMgr.scheduleOpsInFlightMetric(ctx, inFlightCheckInterval)
+	go opMgr.scheduleOpsInFlightMetric(ctx)
 }
 
-func (opMgr *operationMetricsManager) scheduleOpsInFlightMetric(ctx context.Context, interval time.Duration) {
-	ticker := time.NewTicker(interval)
+func (opMgr *operationMetricsManager) scheduleOpsInFlightMetric(ctx context.Context) {
+	ticker := time.NewTicker(inFlightCheckInterval)
 	defer ticker.Stop()
 	for {
 		select {

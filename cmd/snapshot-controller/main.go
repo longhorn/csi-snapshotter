@@ -52,7 +52,6 @@ import (
 	clientset "github.com/kubernetes-csi/external-snapshotter/client/v8/clientset/versioned"
 	snapshotscheme "github.com/kubernetes-csi/external-snapshotter/client/v8/clientset/versioned/scheme"
 	informers "github.com/kubernetes-csi/external-snapshotter/client/v8/informers/externalversions"
-	groupsnapshotinformers "github.com/kubernetes-csi/external-snapshotter/client/v8/informers/externalversions/volumegroupsnapshot/v1"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	coreinformers "k8s.io/client-go/informers"
 	utilflag "k8s.io/component-base/cli/flag"
@@ -91,9 +90,53 @@ var (
 
 var version = "unknown"
 
-// waitForCRDCondition polls condition with an exponential backoff, waiting at
-// most the duration specified by retryCRDIntervalMax.
-func waitForCRDCondition(condition wait.ConditionWithContextFunc) error {
+// Checks that the VolumeSnapshot v1 CRDs exist. It will wait at most the duration specified by retryCRDIntervalMax
+func ensureCustomResourceDefinitionsExist(client *clientset.Clientset, enableVolumeGroupSnapshots bool) error {
+	condition := func(ctx context.Context) (bool, error) {
+		var err error
+		// List calls should return faster with a limit of 1.
+		// We do not care about what is returned and just want to make sure the CRDs exist.
+		listOptions := metav1.ListOptions{Limit: 1}
+
+		// scoping to an empty namespace makes `List` work across all namespaces
+		_, err = client.SnapshotV1().VolumeSnapshots("").List(ctx, listOptions)
+		if err != nil {
+			klog.Errorf("Failed to list v1 volumesnapshots with error=%+v", err)
+			return false, nil
+		}
+
+		_, err = client.SnapshotV1().VolumeSnapshotClasses().List(ctx, listOptions)
+		if err != nil {
+			klog.Errorf("Failed to list v1 volumesnapshotclasses with error=%+v", err)
+			return false, nil
+		}
+		_, err = client.SnapshotV1().VolumeSnapshotContents().List(ctx, listOptions)
+		if err != nil {
+			klog.Errorf("Failed to list v1 volumesnapshotcontents with error=%+v", err)
+			return false, nil
+		}
+		if enableVolumeGroupSnapshots {
+			_, err = client.GroupsnapshotV1().VolumeGroupSnapshots("").List(ctx, listOptions)
+			if err != nil {
+				klog.Errorf("Failed to list v1 volumegroupsnapshots with error=%+v", err)
+				return false, nil
+			}
+
+			_, err = client.GroupsnapshotV1().VolumeGroupSnapshotClasses().List(ctx, listOptions)
+			if err != nil {
+				klog.Errorf("Failed to list v1 volumegroupsnapshotclasses with error=%+v", err)
+				return false, nil
+			}
+			_, err = client.GroupsnapshotV1().VolumeGroupSnapshotContents().List(ctx, listOptions)
+			if err != nil {
+				klog.Errorf("Failed to list v1 volumegroupsnapshotcontents with error=%+v", err)
+				return false, nil
+			}
+		}
+
+		return true, nil
+	}
+
 	const retryFactor = 1.5
 	const initialDuration = 100 * time.Millisecond
 	backoff := wait.Backoff{
@@ -106,56 +149,11 @@ func waitForCRDCondition(condition wait.ConditionWithContextFunc) error {
 	maxBackoffDuration := max(*retryCRDIntervalMax, 1*time.Second)
 	ctx, cancel := context.WithTimeout(context.Background(), maxBackoffDuration)
 	defer cancel()
-	return wait.ExponentialBackoffWithContext(ctx, backoff, condition)
-}
+	if err := wait.ExponentialBackoffWithContext(ctx, backoff, condition); err != nil {
+		return err
+	}
 
-// ensureCustomResourceDefinitionsExist checks that the VolumeSnapshot v1 CRDs exist.
-// It will wait at most the duration specified by retryCRDIntervalMax.
-func ensureCustomResourceDefinitionsExist(client *clientset.Clientset) error {
-	return waitForCRDCondition(func(ctx context.Context) (bool, error) {
-		// List calls should return faster with a limit of 1.
-		// We do not care about what is returned and just want to make sure the CRDs exist.
-		listOptions := metav1.ListOptions{Limit: 1}
-
-		// scoping to an empty namespace makes `List` work across all namespaces
-		if _, err := client.SnapshotV1().VolumeSnapshots("").List(ctx, listOptions); err != nil {
-			klog.Errorf("Failed to list v1 volumesnapshots with error=%+v", err)
-			return false, nil
-		}
-		if _, err := client.SnapshotV1().VolumeSnapshotClasses().List(ctx, listOptions); err != nil {
-			klog.Errorf("Failed to list v1 volumesnapshotclasses with error=%+v", err)
-			return false, nil
-		}
-		if _, err := client.SnapshotV1().VolumeSnapshotContents().List(ctx, listOptions); err != nil {
-			klog.Errorf("Failed to list v1 volumesnapshotcontents with error=%+v", err)
-			return false, nil
-		}
-
-		return true, nil
-	})
-}
-
-// ensureVolumeGroupSnapshotCRDsExist checks that the VolumeGroupSnapshot v1 CRDs exist.
-// It will wait at most the duration specified by retryCRDIntervalMax.
-func ensureVolumeGroupSnapshotCRDsExist(client *clientset.Clientset) error {
-	return waitForCRDCondition(func(ctx context.Context) (bool, error) {
-		listOptions := metav1.ListOptions{Limit: 1}
-
-		if _, err := client.GroupsnapshotV1().VolumeGroupSnapshots("").List(ctx, listOptions); err != nil {
-			klog.Errorf("Failed to list v1 volumegroupsnapshots with error=%+v", err)
-			return false, nil
-		}
-		if _, err := client.GroupsnapshotV1().VolumeGroupSnapshotClasses().List(ctx, listOptions); err != nil {
-			klog.Errorf("Failed to list v1 volumegroupsnapshotclasses with error=%+v", err)
-			return false, nil
-		}
-		if _, err := client.GroupsnapshotV1().VolumeGroupSnapshotContents().List(ctx, listOptions); err != nil {
-			klog.Errorf("Failed to list v1 volumegroupsnapshotcontents with error=%+v", err)
-			return false, nil
-		}
-
-		return true, nil
-	})
+	return nil
 }
 
 func main() {
@@ -232,36 +230,6 @@ func main() {
 	// Add Snapshot types to the default Kubernetes so events can be logged for them
 	snapshotscheme.AddToScheme(scheme.Scheme)
 
-	if err := ensureCustomResourceDefinitionsExist(snapClient); err != nil {
-		klog.Errorf("Exiting due to failure to ensure CRDs exist during startup: %+v", err)
-		os.Exit(1)
-	}
-
-	// The VolumeGroupSnapshot feature is GA and enabled by default. Clusters
-	// upgrading the snapshot controller may not have the VolumeGroupSnapshot
-	// CRDs installed, and once the feature gate is removed in a future
-	// release there will be no way to opt out of this check by disabling the
-	// gate. So regardless of whether the gate is on by default or was
-	// explicitly requested, treat missing CRDs as non-fatal: log a warning
-	// and continue running with volume group snapshot support disabled.
-	enableVolumeGroupSnapshots := utilfeature.DefaultFeatureGate.Enabled(features.VolumeGroupSnapshot)
-	if enableVolumeGroupSnapshots {
-		if err := ensureVolumeGroupSnapshotCRDsExist(snapClient); err != nil {
-			klog.Warningf("VolumeGroupSnapshot CRDs were not found; disabling the VolumeGroupSnapshot feature for this run. "+
-				"Install the VolumeGroupSnapshot CRDs to use this feature: %v", err)
-			enableVolumeGroupSnapshots = false
-		}
-	}
-
-	var volumeGroupSnapshotInformer groupsnapshotinformers.VolumeGroupSnapshotInformer
-	var volumeGroupSnapshotContentInformer groupsnapshotinformers.VolumeGroupSnapshotContentInformer
-	var volumeGroupSnapshotClassInformer groupsnapshotinformers.VolumeGroupSnapshotClassInformer
-	if enableVolumeGroupSnapshots {
-		volumeGroupSnapshotInformer = factory.Groupsnapshot().V1().VolumeGroupSnapshots()
-		volumeGroupSnapshotContentInformer = factory.Groupsnapshot().V1().VolumeGroupSnapshotContents()
-		volumeGroupSnapshotClassInformer = factory.Groupsnapshot().V1().VolumeGroupSnapshotClasses()
-	}
-
 	klog.V(2).Infof("Start NewCSISnapshotController with kubeconfig [%s] resyncPeriod [%+v]", *kubeconfig, *resyncPeriod)
 
 	ctrl := controller.NewCSISnapshotCommonController(
@@ -270,9 +238,9 @@ func main() {
 		factory.Snapshot().V1().VolumeSnapshots(),
 		factory.Snapshot().V1().VolumeSnapshotContents(),
 		factory.Snapshot().V1().VolumeSnapshotClasses(),
-		volumeGroupSnapshotInformer,
-		volumeGroupSnapshotContentInformer,
-		volumeGroupSnapshotClassInformer,
+		factory.Groupsnapshot().V1().VolumeGroupSnapshots(),
+		factory.Groupsnapshot().V1().VolumeGroupSnapshotContents(),
+		factory.Groupsnapshot().V1().VolumeGroupSnapshotClasses(),
 		coreFactory.Core().V1().PersistentVolumeClaims(),
 		coreFactory.Core().V1().PersistentVolumes(),
 		nodeInformer,
@@ -284,8 +252,13 @@ func main() {
 		workqueue.NewTypedItemExponentialFailureRateLimiter[string](*retryIntervalStart, *retryIntervalMax),
 		*enableDistributedSnapshotting,
 		*preventVolumeModeConversion,
-		enableVolumeGroupSnapshots,
+		utilfeature.DefaultFeatureGate.Enabled(features.VolumeGroupSnapshot),
 	)
+
+	if err := ensureCustomResourceDefinitionsExist(snapClient, utilfeature.DefaultFeatureGate.Enabled(features.VolumeGroupSnapshot)); err != nil {
+		klog.Errorf("Exiting due to failure to ensure CRDs exist during startup: %+v", err)
+		os.Exit(1)
+	}
 
 	ctx := context.Background()
 
