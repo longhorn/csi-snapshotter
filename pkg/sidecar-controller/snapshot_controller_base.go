@@ -49,13 +49,12 @@ import (
 )
 
 type csiSnapshotSideCarController struct {
-	clientset                     clientset.Interface
-	client                        kubernetes.Interface
-	driverName                    string
-	eventRecorder                 record.EventRecorder
-	contentQueue                  workqueue.TypedRateLimitingInterface[string]
-	extraCreateMetadata           bool
-	supportsSnapshotAccessibility bool
+	clientset           clientset.Interface
+	client              kubernetes.Interface
+	driverName          string
+	eventRecorder       record.EventRecorder
+	contentQueue        workqueue.TypedRateLimitingInterface[string]
+	extraCreateMetadata bool
 
 	contentLister       snapshotlisters.VolumeSnapshotContentLister
 	contentListerSynced cache.InformerSynced
@@ -93,7 +92,6 @@ func NewCSISnapshotSideCarController(
 	groupSnapshotNamePrefix string,
 	groupSnapshotNameUUIDLength int,
 	extraCreateMetadata bool,
-	supportsSnapshotAccessibility bool,
 	contentRateLimiter workqueue.TypedRateLimiter[string],
 	enableVolumeGroupSnapshots bool,
 	volumeGroupSnapshotContentInformer groupsnapshotinformers.VolumeGroupSnapshotContentInformer,
@@ -117,8 +115,7 @@ func NewCSISnapshotSideCarController(
 		contentQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
 			contentRateLimiter, workqueue.TypedRateLimitingQueueConfig[string]{
 				Name: "csi-snapshotter-content"}),
-		extraCreateMetadata:           extraCreateMetadata,
-		supportsSnapshotAccessibility: supportsSnapshotAccessibility,
+		extraCreateMetadata: extraCreateMetadata,
 	}
 
 	volumeSnapshotContentInformer.Informer().AddEventHandlerWithResyncPeriod(
