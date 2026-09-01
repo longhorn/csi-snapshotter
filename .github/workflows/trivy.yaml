@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Parse go version from release-tools/prow.sh
         run: |
@@ -21,7 +21,7 @@ jobs:
           echo "$GO_VERSION" >> '.go-version'
 
       - name: Install go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
           go-version-file: .go-version
 
@@ -35,8 +35,7 @@ jobs:
       - name: Run Trivy vulnerability scanner on csi-snapshotter image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         env:
-          # Fall back to another registry if a DB mirror is rate-limited or unavailable.
-          TRIVY_DB_REPOSITORY: "mirror.gcr.io/aquasec/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2,public.ecr.aws/aquasecurity/trivy-db:2"
+          TRIVY_DB_REPOSITORY: "public.ecr.aws/aquasecurity/trivy-db:2"
         with:
           image-ref: 'test/csi-snapshotter:latest'
           format: 'table'
@@ -48,8 +47,7 @@ jobs:
       - name: Run Trivy vulnerability scanner on snapshotter-controller image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         env:
-          # Fall back to another registry if a DB mirror is rate-limited or unavailable.
-          TRIVY_DB_REPOSITORY: "mirror.gcr.io/aquasec/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2,public.ecr.aws/aquasecurity/trivy-db:2"
+          TRIVY_DB_REPOSITORY: "public.ecr.aws/aquasecurity/trivy-db:2"
         with:
           image-ref: 'test/snapshot-controller:latest'
           format: 'table'
@@ -61,8 +59,7 @@ jobs:
       - name: Run Trivy vulnerability scanner on snapshot-conversion-webhook image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         env:
-          # Fall back to another registry if a DB mirror is rate-limited or unavailable.
-          TRIVY_DB_REPOSITORY: "mirror.gcr.io/aquasec/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2,public.ecr.aws/aquasecurity/trivy-db:2"
+          TRIVY_DB_REPOSITORY: "public.ecr.aws/aquasecurity/trivy-db:2"
         with:
           image-ref: 'test/snapshot-conversion-webhook:latest'
           format: 'table'
